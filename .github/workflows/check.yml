@@ -17,27 +17,39 @@ jobs:
         run: |
           rustup toolchain install 1.97.0 --profile minimal
           rustc +1.97.0 --version
-      - name: "cargo check - native target features (portable paths)"
+      - name: "1. cargo check - native target features (portable paths)"
         env:
           TREE: ${{ inputs.tree }}
         run: |
           set -euo pipefail
           cd "trees/${TREE}"
           cargo +1.97.0 check -p flock-core -p flock-prover 2>&1 | tee check-native.log
-      - name: "cargo check - AVX-512 + GFNI features enabled (hot kernels typechecked)"
+      - name: "2. typecheck AVX-512/GFNI-gated code in flock-core only (flags applied per-crate)"
         env:
           TREE: ${{ inputs.tree }}
-          RUSTFLAGS: "-C target-cpu=native -C target-feature=+avx512f,+avx512vl,+avx512bw,+avx512dq,+avx512vbmi,+avx512vbmi2,+avx512ifma,+avx512vnni,+avx512bitalg,+avx512vpopcntdq,+gfni,+vpclmulqdq,+vaes,+bmi2"
         run: |
           set -euo pipefail
           cd "trees/${TREE}"
-          cargo +1.97.0 check -p flock-core -p flock-prover 2>&1 | tee check-avx512.log
+          cargo +1.97.0 rustc -p flock-core --lib -- \
+            -C target-cpu=native \
+            -C target-feature=+avx512f,+avx512vl,+avx512bw,+avx512dq,+avx512vbmi,+avx512vbmi2,+avx512ifma,+avx512vnni,+avx512bitalg,+avx512vpopcntdq,+gfni,+vpclmulqdq,+vaes,+bmi2 \
+            2>&1 | tee check-core-avx512.log
+      - name: "3. typecheck AVX-512/GFNI-gated code in flock-prover only (flags applied per-crate)"
+        env:
+          TREE: ${{ inputs.tree }}
+        run: |
+          set -euo pipefail
+          cd "trees/${TREE}"
+          cargo +1.97.0 rustc -p flock-prover --lib -- \
+            -C target-cpu=native \
+            -C target-feature=+avx512f,+avx512vl,+avx512bw,+avx512dq,+avx512vbmi,+avx512vbmi2,+avx512ifma,+avx512vnni,+avx512bitalg,+avx512vpopcntdq,+gfni,+vpclmulqdq,+vaes,+bmi2 \
+            2>&1 | tee check-prover-avx512.log
       - name: Summary
         if: always()
         run: |
           cd "trees/${{ inputs.tree }}" || exit 0
-          for f in check-native.log check-avx512.log; do
+          for f in check-native.log check-core-avx512.log check-prover-avx512.log; do
             echo "===== $f ====="
             grep -E "^(error|error\[)" "$f" | head -40 || echo "(no errors)"
-            grep -E "Finished" "$f" | tail -1 || echo "(did not finish)"
+            grep -E "Finished|Compiling" "$f" | tail -1 || echo "(no output)"
           done
