@@ -1,0 +1,34 @@
+name: check
+on:
+  workflow_dispatch:
+    inputs:
+      tree:
+        description: "tree folder under trees/ (e.g. union-v18)"
+        required: true
+        default: "union-v18"
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - name: Toolchain
+        run: |
+          rustup toolchain install 1.97.0 --profile minimal
+          rustc +1.97.0 --version
+      - name: cargo check (flock-core + flock-prover)
+        env:
+          TREE: ${{ inputs.tree }}
+        run: |
+          set -euo pipefail
+          cd "trees/${TREE}"
+          cargo +1.97.0 check -p flock-core -p flock-prover 2>&1 | tee check.log
+      - name: Summary
+        if: always()
+        run: |
+          cd "trees/${{ inputs.tree }}" || exit 0
+          echo "----- errors -----"
+          grep -E "^(error|error\[)" check.log | head -40 || echo "(none)"
+          echo "----- finished? -----"
+          grep -E "Finished" check.log | tail -1 || echo "(did not finish)"
