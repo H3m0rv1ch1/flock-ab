@@ -30,6 +30,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 100
     steps:
+      - name: Checkout harness repo
+        uses: actions/checkout@v4
+        with:
+          path: harness
       - name: Checkout base tree
         uses: actions/checkout@v4
         with:
@@ -54,5 +58,5 @@ jobs:
           WARMUP: ${{ inputs.warmup }}
           LOG2: ${{ inputs.log2 }}
         run: |
-          sudo chmod +x ab.sh
-          bash ab.sh
+          sudo chmod +x harness/ab.sh
+          bash harness/ab.sh
