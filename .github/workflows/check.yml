@@ -17,18 +17,27 @@ jobs:
         run: |
           rustup toolchain install 1.97.0 --profile minimal
           rustc +1.97.0 --version
-      - name: cargo check (flock-core + flock-prover)
+      - name: "cargo check - native target features (portable paths)"
         env:
           TREE: ${{ inputs.tree }}
         run: |
           set -euo pipefail
           cd "trees/${TREE}"
-          cargo +1.97.0 check -p flock-core -p flock-prover 2>&1 | tee check.log
+          cargo +1.97.0 check -p flock-core -p flock-prover 2>&1 | tee check-native.log
+      - name: "cargo check - AVX-512 + GFNI features enabled (hot kernels typechecked)"
+        env:
+          TREE: ${{ inputs.tree }}
+          RUSTFLAGS: "-C target-cpu=native -C target-feature=+avx512f,+avx512vl,+avx512bw,+avx512dq,+avx512vbmi,+avx512vbmi2,+avx512ifma,+avx512vnni,+avx512bitalg,+avx512vpopcntdq,+gfni,+vpclmulqdq,+vaes,+bmi2"
+        run: |
+          set -euo pipefail
+          cd "trees/${TREE}"
+          cargo +1.97.0 check -p flock-core -p flock-prover 2>&1 | tee check-avx512.log
       - name: Summary
         if: always()
         run: |
           cd "trees/${{ inputs.tree }}" || exit 0
-          echo "----- errors -----"
-          grep -E "^(error|error\[)" check.log | head -40 || echo "(none)"
-          echo "----- finished? -----"
-          grep -E "Finished" check.log | tail -1 || echo "(did not finish)"
+          for f in check-native.log check-avx512.log; do
+            echo "===== $f ====="
+            grep -E "^(error|error\[)" "$f" | head -40 || echo "(no errors)"
+            grep -E "Finished" "$f" | tail -1 || echo "(did not finish)"
+          done
